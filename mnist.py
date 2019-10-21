@@ -55,12 +55,8 @@ dataset_train_raw = datasets['train']
 dataset_test_raw = datasets['test']
 
 # Prepare training/testing dataset
-options = tf.data.Options()
-options.experimental_distribute.auto_shard = False
-dataset_train = dataset_train_raw.map(scale_image).shuffle(BUFFER_SIZE).repeat().batch(BATCH_SIZE).with_options(options)
-dataset_test = dataset_test_raw.map(scale_image).batch(BATCH_SIZE).with_options(options)
-
-callbacks = []
+dataset_train = dataset_train_raw.map(scale_image).shuffle(BUFFER_SIZE).repeat().batch(BATCH_SIZE)
+dataset_test = dataset_test_raw.map(scale_image).batch(BATCH_SIZE)
 
 # Build and train the model as multi worker
 with strategy.scope():
