@@ -4,18 +4,6 @@ import math
 import tensorflow as tf
 import tensorflow_datasets as tfds
 
-# # Rotate image by 3 degrees
-# def rotate_image_1(image, label):
-#     image = tf.addons.image.rotate(image, math.radians(3))
-#     return image, label
-#
-#
-# # Rotate image by -3 degrees
-# def rotate_image_2(image, label):
-#     image = tf.contrib.image.rotate(image, math.radians(-3))
-#     return image, label
-
-
 # Pixel values, which are 0-255, have to be normalized to the 0-1 range. Define this scale in a function.
 def scale_image(image, label):
     image = tf.dtypes.cast(image, tf.float32)
@@ -46,14 +34,6 @@ def build_model():
     model.summary()
     return model
 
-
-# Augment dataset
-def augment_dataset(dataset_train_raw):
-    # dataset_train_rotated_1 = dataset_train_raw.map(rotate_image_1)
-    # dataset_train_rotated_2 = dataset_train_raw.map(rotate_image_2)
-    # return dataset_train_raw.concatenate(dataset_train_rotated_1).concatenate(dataset_train_rotated_2)
-    return dataset_train_raw
-
 # Define distributed strategy
 strategy = tf.distribute.experimental.MultiWorkerMirroredStrategy()
 NUM_OF_WORKERS = strategy.num_replicas_in_sync
@@ -69,15 +49,15 @@ print("{} batch size".format(BATCH_SIZE))
 datasets, info = tfds.load(name='mnist', with_info=True, as_supervised=True)
 NUM_OF_TRAIN_SAMPLES = info.splits['train'].num_examples
 NUM_OF_TEST_SAMPLES = info.splits['test'].num_examples
-print("{} samples in training dataset, {} samples in testing dataset".format(NUM_OF_TRAIN_SAMPLES, NUM_OF_TEST_SAMPLES))
+STEPS_PER_EPOCH = math.ceil(NUM_OF_TRAIN_SAMPLES//BATCH_SIZE)
+print("{} samples in training dataset, {} samples in testing dataset, {} steps in one epoch".format(NUM_OF_TRAIN_SAMPLES, NUM_OF_TEST_SAMPLES, STEPS_PER_EPOCH))
 dataset_train_raw = datasets['train']
 dataset_test_raw = datasets['test']
 
 # Prepare training/testing dataset
 options = tf.data.Options()
 options.experimental_distribute.auto_shard = False
-dataset_train_augmented = augment_dataset(dataset_train_raw)
-dataset_train = dataset_train_augmented.map(scale_image).cache().shuffle(BUFFER_SIZE).batch(BATCH_SIZE).with_options(options)
+dataset_train = dataset_train_raw.map(scale_image).shuffle(BUFFER_SIZE).repeat().batch(BATCH_SIZE).with_options(options)
 dataset_test = dataset_test_raw.map(scale_image).batch(BATCH_SIZE).with_options(options)
 
 callbacks = []
@@ -85,11 +65,11 @@ callbacks = []
 # Build and train the model as multi worker
 with strategy.scope():
     model = build_model()
-model.fit(x=dataset_train, epochs=5)
+model.fit(dataset_train, epochs=5, steps_per_epoch=STEPS_PER_EPOCH)
 
 # Show model summary, and evaluate it
 model.summary()
-eval_loss, eval_acc = model.evaluate(x=dataset_test)
+eval_loss, eval_acc = model.evaluate(dataset_test)
 print("\nEval loss: {}, Eval Accuracy: {}".format(eval_loss, eval_acc))
 
 # Save the model
